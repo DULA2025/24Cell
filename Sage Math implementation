@@ -1,0 +1,72 @@
+from sage.graphs.graph import Graph
+from sage.arith.all import is_prime
+import math
+
+# Helper function to check if prime is congruent to 1 or 5 mod 6
+def prime_congruence(p):
+    return p > 3 and (p % 6 == 1 or p % 6 == 5)
+
+# Define a list of primes congruent to 1 or 5 mod 6 up to a reasonable limit
+prime_candidates = [p for p in range(5, 500) if is_prime(p) and prime_congruence(p)]
+
+# We need 24 vertices, so we'll take the first 24 primes from our list
+prime_vertices = [p - 1 for p in prime_candidates[:24]]  # Subtract 1 to convert to 0-indexing
+
+G = Graph()
+G.add_vertices(prime_vertices)
+
+# Define edges - Enhancing complexity with geometric considerations
+
+# Connect vertices based on their prime number properties and geometric considerations
+for i in range(len(prime_vertices)):
+    for j in range(i + 1, len(prime_vertices)):
+        # Connect if the difference in their prime indices is prime
+        if is_prime(abs(prime_candidates[i] - prime_candidates[j])):
+            G.add_edge(prime_vertices[i], prime_vertices[j])
+        # Connect if one is a multiple of the other
+        elif prime_candidates[j] % prime_candidates[i] == 0 or prime_candidates[i] % prime_candidates[j] == 0:
+            G.add_edge(prime_vertices[i], prime_vertices[j])
+        # Check if the difference forms a perfect square for geometric structure
+        elif math.sqrt((prime_candidates[i] - prime_candidates[j])**2) % 1 == 0:
+            G.add_edge(prime_vertices[i], prime_vertices[j])
+        # Simulate a cycle or grid pattern
+        elif (i - j) % 5 == 0 or (j - i) % 5 == 0:  # Changed from 11 to 5 for this smaller graph
+            G.add_edge(prime_vertices[i], prime_vertices[j])
+        # Additional rule to simulate known geometric structures like polyhedra or regular polygons
+        elif abs(prime_candidates[i] - prime_candidates[j]) in [3, 4, 5]:  # Pythagorean triples for right triangles
+            G.add_edge(prime_vertices[i], prime_vertices[j])
+        # Simulating Platonic solids or other polyhedra by checking for specific angle relationships
+        elif math.atan2(prime_candidates[j] - prime_candidates[i], prime_candidates[j] + prime_candidates[i]) % (math.pi / 3) == 0:  # 60 degrees, for hexagons or related structures
+            G.add_edge(prime_vertices[i], prime_vertices[j])
+
+cn = 5  # Number of colors
+
+clauses = []
+
+def lit(vertex, color):
+    # Adjusting for prime-based coloring:
+    if is_prime(vertex + 1) and prime_congruence(vertex + 1):  # Check if the original prime number meets our criteria
+        return (vertex + 1) * cn + color + 1  # +1 because we're dealing with 1-indexed literals in CNF
+    else:
+        return (vertex + 1) * cn + color + 1  # Standard coloring for non-prime vertices (though all are prime here)
+
+# Generate clauses for each vertex ensuring at least one color
+for v in prime_vertices:
+    clauses.append([lit(v, c) for c in range(cn)])
+    for c1 in range(cn):
+        for c2 in range(c1):
+            clauses.append([-lit(v, c1), -lit(v, c2)])  # No two colors for one vertex
+
+# Generate clauses for edges ensuring adjacent vertices don't share colors
+for a, b in G.edges(labels=False):
+    for c in range(cn):
+        clauses.append([-lit(a, c), -lit(b, c)])
+
+# Output the CNF formula
+print('p cnf', len(prime_vertices) * cn, len(clauses))
+
+for clause in clauses:
+    print(*clause, 0)
+
+# Visualization of the graph in SageMath
+G.plot(edge_colors={'black': G.edges(labels=False)}).show()
