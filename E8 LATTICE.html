@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E8 Root System - WebGL Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #info-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 20px;
+        }
+        #fps-counter {
+            font-size: 16px;
+            color: #00ff00;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="info-container">
+        <h1>E8 Root System</h1>
+        <div id="fps-counter">FPS: --</div>
+    </div>
+
+    <!-- Import three.js and OrbitControls for camera interaction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --- Core Application Logic ---
+        let scene, camera, renderer, controls, points, lines;
+        let rootVectors8D = [];
+        let lineIndices = [];
+        let projectionMatrix;
+        let frameCounter = 0;
+        const phi = (1 + Math.sqrt(5)) / 2;
+
+        // FPS counter variables
+        let lastTime = performance.now();
+        let frameCount = 0;
+
+        // --- 1. DATA GENERATION (Ported from Python/Numba) ---
+        function generateE8Data() {
+            console.log("Generating E8 root system...");
+            // Type 1 roots
+            for (let i = 0; i < 8; i++) {
+                for (let j = i + 1; j < 8; j++) {
+                    for (const s1 of [-1, 1]) {
+                        for (const s2 of [-1, 1]) {
+                            const vec = new Array(8).fill(0);
+                            vec[i] = s1;
+                            vec[j] = s2;
+                            rootVectors8D.push(vec);
+                        }
+                    }
+                }
+            }
+
+            // Type 2 roots
+            function generateSignCombinations(n, current = []) {
+                if (n === 0) {
+                    if (current.filter(x => x === -1).length % 2 === 0) {
+                        rootVectors8D.push(current.map(s => s * 0.5));
+                    }
+                    return;
+                }
+                generateSignCombinations(n - 1, current.concat(1));
+                generateSignCombinations(n - 1, current.concat(-1));
+            }
+            generateSignCombinations(8);
+
+            console.log(`Generated ${rootVectors8D.length} roots.`);
+
+            // Find line segments
+            for (let i = 0; i < rootVectors8D.length; i++) {
+                for (let j = i + 1; j < rootVectors8D.length; j++) {
+                    let ip = 0;
+                    for (let k = 0; k < 8; k++) {
+                        ip += rootVectors8D[i][k] * rootVectors8D[j][k];
+                    }
+                    if (Math.abs(ip + 1.0) < 1e-9) {
+                        lineIndices.push(i, j);
+                    }
+                }
+            }
+            console.log(`Found ${lineIndices.length / 2} line segments.`);
+        }
+
+        // --- 2. 8D MATH ENGINE (Ported from Python/CuPy) ---
+        function create8DIdentity() {
+            const matrix = Array(8).fill(0).map(() => Array(8).fill(0));
+            for (let i = 0; i < 8; i++) matrix[i][i] = 1;
+            return matrix;
+        }
+
+        function getRotationMatrix8D(theta, i, j) {
+            const R = create8DIdentity();
+            const cos_t = Math.cos(theta);
+            const sin_t = Math.sin(theta);
+            R[i][i] = cos_t; R[i][j] = -sin_t;
+            R[j][i] = sin_t; R[j][j] = cos_t;
+            return R;
+        }
+
+        function multiplyMatrices8D(A, B) {
+            const result = create8DIdentity();
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    let sum = 0;
+                    for (let k = 0; k < 8; k++) {
+                        sum += A[i][k] * B[k][j];
+                    }
+                    result[i][j] = sum;
+                }
+            }
+            return result;
+        }
+
+        function applyMatrixToVector8D(M, v) {
+            const result = new Array(8).fill(0);
+            for (let i = 0; i < 8; i++) {
+                let sum = 0;
+                for (let j = 0; j < 8; j++) {
+                    sum += M[i][j] * v[j];
+                }
+                result[i] = sum;
+            }
+            return result;
+        }
+        
+        // --- 3. THREE.JS / WEBGL SETUP ---
+        function init() {
+            // Generate all the necessary data first
+            generateE8Data();
+
+            // Set up the scene, camera, and renderer
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 3;
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            
+            // Add mouse controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            // Add lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(5, 5, 5);
+            scene.add(dirLight);
+
+            // Create geometry buffers for points and lines
+            const pointGeometry = new THREE.BufferGeometry();
+            const lineGeometry = new THREE.BufferGeometry();
+            
+            const positions = new Float32Array(rootVectors8D.length * 3);
+            const colors = new Float32Array(rootVectors8D.length * 3);
+
+            // Generate vibrant colors (ported from Python/Matplotlib)
+            const coords_x = rootVectors8D.map(v => v[0]);
+            const minX = Math.min(...coords_x);
+            const maxX = Math.max(...coords_x);
+            for (let i = 0; i < rootVectors8D.length; i++) {
+                const vec = rootVectors8D[i];
+                const r = (vec[0] - minX) / (maxX - minX);
+                const g = (vec[1] - minX) / (maxX - minX);
+                const b = (vec[2] - minX) / (maxX - minX);
+                colors[i * 3] = Math.min(1, r * 1.5);
+                colors[i * 3 + 1] = Math.min(1, g * 1.5);
+                colors[i * 3 + 2] = Math.min(1, b * 1.5);
+            }
+
+            pointGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            pointGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            lineGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineIndices.length * 3), 3));
+            lineGeometry.setIndex(lineIndices);
+
+            // Create a texture for the points (white circle with black outline)
+            const canvasTex = document.createElement('canvas');
+            canvasTex.width = 64;
+            canvasTex.height = 64;
+            const context = canvasTex.getContext('2d');
+            context.beginPath();
+            context.arc(32, 32, 28, 0, 2 * Math.PI);
+            context.fillStyle = '#ffffff';
+            context.fill();
+            context.lineWidth = 4;
+            context.strokeStyle = '#000000';
+            context.stroke();
+            const pointTexture = new THREE.CanvasTexture(canvasTex);
+
+            // Create materials
+            const pointMaterial = new THREE.PointsMaterial({
+                size: 0.1,
+                map: pointTexture,
+                vertexColors: true,
+                alphaTest: 0.5,
+                transparent: true
+            });
+
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: 0x888888,
+                transparent: true,
+                opacity: 0.2
+            });
+
+            // Create the final objects and add them to the scene
+            points = new THREE.Points(pointGeometry, pointMaterial);
+            lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+            scene.add(points);
+            scene.add(lines);
+
+            // The 3D projection matrix (from Python)
+            projectionMatrix = [
+                [0., -0.55679344, 0.19694925, -0.19694925, 0.08054772, -0.38529087, 0., 0.38529087],
+                [0.18091315, 0., 0.16021295, 0.16021295, 0., 0.09901705, 0.76636042, 0.09901705],
+                [0.33826121, 0, 0, -0.33826121, 0.67281636, 0.17150256, 0, -0.17150256]
+            ];
+        }
+
+        // --- 4. ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update FPS counter
+            frameCount++;
+            const currentTime = performance.now();
+            if (currentTime >= lastTime + 1000) {
+                document.getElementById('fps-counter').textContent = `FPS: ${frameCount}`;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+
+            // Calculate rotation matrices
+            const theta = 0.005 * frameCounter;
+            const R1 = getRotationMatrix8D(theta, 0, 1);
+            const R2 = getRotationMatrix8D(theta * phi, 2, 3);
+            const R3 = getRotationMatrix8D(theta * phi * phi, 4, 5);
+            
+            // Combine rotations
+            const R_temp = multiplyMatrices8D(R1, R2);
+            const R = multiplyMatrices8D(R_temp, R3);
+
+            // Update geometry buffers
+            const pointPositions = points.geometry.attributes.position.array;
+            const linePositions = lines.geometry.attributes.position.array;
+
+            for (let i = 0; i < rootVectors8D.length; i++) {
+                // Apply 8D rotation
+                const rotatedVec = applyMatrixToVector8D(R, rootVectors8D[i]);
+
+                // Apply 3D projection
+                const x = rotatedVec.reduce((sum, val, idx) => sum + val * projectionMatrix[0][idx], 0);
+                const y = rotatedVec.reduce((sum, val, idx) => sum + val * projectionMatrix[1][idx], 0);
+                const z = rotatedVec.reduce((sum, val, idx) => sum + val * projectionMatrix[2][idx], 0);
+
+                pointPositions[i * 3] = x;
+                pointPositions[i * 3 + 1] = y;
+                pointPositions[i * 3 + 2] = z;
+                
+                linePositions[i * 3] = x;
+                linePositions[i * 3 + 1] = y;
+                linePositions[i * 3 + 2] = z;
+            }
+
+            // Tell three.js that the positions have changed
+            points.geometry.attributes.position.needsUpdate = true;
+            lines.geometry.attributes.position.needsUpdate = true;
+            
+            controls.update();
+            renderer.render(scene, camera);
+            frameCounter++;
+        }
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, false);
+        
+        // Start the application
+        init();
+        animate();
+    </script>
+</body>
+</html>
