@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leech Lattice - Full Geometry</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas { display: block; }
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 100, 0, 0.3);
+            backdrop-filter: blur(10px);
+            min-width: 280px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.3s ease;
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            background: linear-gradient(90deg, #ffcc00, #ff4400);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+        }
+        #fps-counter {
+            font-size: 18px;
+            color: #ff8800;
+            margin-bottom: 15px;
+            font-family: 'Courier New', monospace;
+        }
+        .control-group { margin-bottom: 20px; }
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #ffaa00;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .control-value { color: #ffffff; font-weight: bold; }
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffcc00, #ff4400);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 150, 0, 0.5);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffcc00, #ff4400);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px rgba(255, 150, 0, 0.5);
+        }
+        button {
+            padding: 10px;
+            background: rgba(255, 150, 0, 0.1);
+            border: 1px solid rgba(255, 150, 0, 0.3);
+            border-radius: 6px;
+            color: #ffaa00;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: rgba(255, 150, 0, 0.2);
+            border-color: rgba(255, 150, 0, 0.6);
+            box-shadow: 0 0 15px rgba(255, 150, 0, 0.3);
+        }
+        .glow-effect { animation: fire-glow 2s ease-in-out infinite alternate; }
+        @keyframes fire-glow {
+            from { text-shadow: 0 0 5px #ff8800, 0 0 10px #ff4400; }
+            to { text-shadow: 0 0 10px #ffcc00, 0 0 20px #ff8800, 0 0 30px #ff4400; }
+        }
+        #stats {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 150, 0, 0.2);
+            font-size: 11px;
+            color: #888;
+        }
+         #toggle-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 100, 0, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            color: #ffaa00;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        #toggle-panel:hover {
+            background: rgba(255, 100, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="info-panel">
+        <h1 class="glow-effect">Leech Lattice</h1>
+        <div id="fps-counter">FPS: --</div>
+        
+        <div class="control-group">
+            <div class="control-label"><span>Rotation Speed</span><span class="control-value" id="speed-value">1.0x</span></div>
+            <input type="range" id="rotation-speed" min="0" max="5" step="0.1" value="1">
+        </div>
+        
+        <div class="control-group">
+            <div class="control-label"><span>Point Size</span><span class="control-value" id="size-value">0.02</span></div>
+            <input type="range" id="point-size" min="0.005" max="0.1" step="0.001" value="0.02">
+        </div>
+                
+        <div class="control-group">
+            <div class="control-label"><span>Glow Intensity</span><span class="control-value" id="glow-value">1.0</span></div>
+            <input type="range" id="glow-intensity" min="0" max="3" step="0.1" value="1.0">
+        </div>
+        
+        <div class="control-group">
+            <div class="control-label"><span>Camera Distance</span><span class="control-value" id="distance-value">8.0</span></div>
+            <input type="range" id="camera-distance" min="2" max="20" step="0.1" value="8">
+        </div>
+        
+        <div class="checkbox-group" style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
+            <input type="checkbox" id="auto-rotate" checked>
+            <label for="auto-rotate">Auto Rotate</label>
+        </div>
+        
+        <div class="button-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+            <button onclick="resetCamera()">Reset Camera</button>
+            <button onclick="randomizeRotation()">Random Spin</button>
+        </div>
+        
+        <div id="stats">
+            <div>Vertices: <span id="vertex-count">--</span></div>
+            <div>(of 196,560 total)</div>
+        </div>
+    </div>
+    
+    <div id="toggle-panel" onclick="togglePanel()">☰ Controls</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+    (function() {
+        const DIM = 24;
+        let scene, camera, renderer, controls, points;
+        let latticeVectorsND = [];
+        let projectionMatrix;
+        let frameCounter = 0;
+        const phi = (1 + Math.sqrt(5)) / 2;
+        let rotationSpeed = 1.0;
+        let autoRotate = true;
+        const frameTimes = [];
+        let lastFrameTime = performance.now();
+        
+        const R1 = createNDimensionalMatrix(DIM), R2 = createNDimensionalMatrix(DIM), R3 = createNDimensionalMatrix(DIM);
+        const R_temp = createNDimensionalMatrix(DIM), R = createNDimensionalMatrix(DIM);
+        const rotatedVec = new Array(DIM).fill(0);
+
+        function generateLeechLatticeData() {
+            console.log("Generating full Leech Lattice geometry...");
+            const SCALE = 1 / Math.sqrt(32);
+
+            for (let i = 0; i < DIM; i++) {
+                for (let j = i + 1; j < DIM; j++) {
+                    for (const s1 of [-2, 2]) {
+                        for (const s2 of [-2, 2]) {
+                            const vec = new Array(DIM).fill(0);
+                            vec[i] = s1; vec[j] = s2;
+                            latticeVectorsND.push(vec.map(v => v * SCALE));
+                        }
+                    }
+                }
+            }
+
+            const C = [4095, 3315, 3411, 3425, 2377, 2421, 2893, 2921, 1905, 1910, 1859, 1876];
+            let octads = new Set();
+            for (let i = 0; i < 4096; i++) {
+                let weight = 0;
+                for (let j = 0; j < 12; j++) if ((i >> j) & 1) weight++;
+                if (weight >= 5) continue;
+                let codeword = 0;
+                for (let j = 0; j < 12; j++) if ((i >> j) & 1) codeword ^= C[j];
+                let octad_indices = new Set();
+                for (let j = 0; j < 12; j++) {
+                    if ((i >> j) & 1) octad_indices.add(j + 12);
+                    if ((codeword >> j) & 1) octad_indices.add(j);
+                }
+                if (octad_indices.size === 8) octads.add(JSON.stringify([...octad_indices].sort((a,b)=>a-b)));
+            }
+            for (const octadStr of octads) {
+                const octad = JSON.parse(octadStr);
+                for (let i = 0; i < 128; i++) {
+                    let vec = new Array(DIM).fill(0);
+                    let sign_product = 1;
+                    for (let j = 0; j < 7; j++) {
+                        const sign = ((i >> j) & 1) ? 1 : -1;
+                        vec[octad[j]] = sign * 2;
+                        sign_product *= sign;
+                    }
+                    vec[octad[7]] = sign_product * 2;
+                    latticeVectorsND.push(vec.map(v => v * SCALE));
+                }
+            }
+            document.getElementById('vertex-count').textContent = latticeVectorsND.length.toLocaleString();
+        }
+        
+        function createNDimensionalMatrix(dim) {
+            const matrix = Array(dim).fill(0).map(() => Array(dim).fill(0));
+            for (let i = 0; i < dim; i++) matrix[i][i] = 1;
+            return matrix;
+        }
+        
+        function getRotationMatrixND(theta, i, j, dim, out) {
+            for (let r = 0; r < dim; r++) for (let c = 0; c < dim; c++) out[r][c] = (r === c) ? 1 : 0;
+            const cos_t = Math.cos(theta), sin_t = Math.sin(theta);
+            out[i][i] = cos_t; out[i][j] = -sin_t;
+            out[j][i] = sin_t; out[j][j] = cos_t;
+        }
+        
+        function multiplyMatricesND(A, B, dim, out) {
+            for (let i = 0; i < dim; i++) for (let j = 0; j < dim; j++) {
+                let sum = 0;
+                for (let k = 0; k < dim; k++) sum += A[i][k] * B[k][j];
+                out[i][j] = sum;
+            }
+        }
+        
+        function applyMatrixToVectorND(M, v, dim, out) {
+            for (let i = 0; i < dim; i++) {
+                let sum = 0;
+                for (let j = 0; j < dim; j++) sum += M[i][j] * v[j];
+                out[i] = sum;
+            }
+        }
+        
+        function generateSymmetricProjectionMatrix(dim) {
+            let initialVectors = [new Array(dim).fill(0), new Array(dim).fill(0), new Array(dim).fill(0)];
+            for(let i=0; i<8; i++) initialVectors[0][i] = 1;
+            for(let i=8; i<16; i++) initialVectors[1][i] = 1;
+            for(let i=0; i<dim; i++) initialVectors[2][i] = (i % 2 === 0) ? 1 : -1;
+            let basis = [];
+            for (let vec of initialVectors) {
+                let tempVec = [...vec];
+                for (let prevBasisVec of basis) {
+                    let proj = 0, basisNormSq = 0;
+                    for(let k=0; k<dim; k++){ proj += tempVec[k] * prevBasisVec[k]; basisNormSq += prevBasisVec[k] * prevBasisVec[k]; }
+                    proj /= basisNormSq > 0 ? basisNormSq : 1;
+                    for(let k=0; k<dim; k++){ tempVec[k] -= proj * prevBasisVec[k]; }
+                }
+                let norm = Math.sqrt(tempVec.reduce((sum, val) => sum + val * val, 0));
+                basis.push(tempVec.map(v => v / (norm > 0 ? norm : 1)));
+            }
+            return basis;
+        }
+
+        function updatePointPositions(rotationMatrix) {
+            const pointPositions = points.geometry.attributes.position.array;
+            for (let i = 0; i < latticeVectorsND.length; i++) {
+                applyMatrixToVectorND(rotationMatrix, latticeVectorsND[i], DIM, rotatedVec);
+                let x = 0, y = 0, z = 0;
+                for (let j = 0; j < DIM; j++) {
+                    x += rotatedVec[j] * projectionMatrix[0][j];
+                    y += rotatedVec[j] * projectionMatrix[1][j];
+                    z += rotatedVec[j] * projectionMatrix[2][j];
+                }
+                pointPositions[i * 3] = x;
+                pointPositions[i * 3 + 1] = y;
+                pointPositions[i * 3 + 2] = z;
+            }
+            points.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function init() {
+            generateLeechLatticeData();
+            projectionMatrix = generateSymmetricProjectionMatrix(DIM);
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x000000, 10, 25);
+            
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 8;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+            
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+            scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+            const pointLight1 = new THREE.PointLight(0xffccaa, 1, 100);
+            pointLight1.position.set(10, 10, 10);
+            scene.add(pointLight1);
+            
+            const pointGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(latticeVectorsND.length * 3);
+            const colors = new Float32Array(latticeVectorsND.length * 3);
+
+            let min_dist = Infinity, max_dist = -Infinity;
+            const distances = new Float32Array(latticeVectorsND.length);
+            for (let i = 0; i < latticeVectorsND.length; i++) {
+                let x = 0, y = 0, z = 0;
+                for (let j = 0; j < DIM; j++) {
+                    x += latticeVectorsND[i][j] * projectionMatrix[0][j];
+                    y += latticeVectorsND[i][j] * projectionMatrix[1][j];
+                    z += latticeVectorsND[i][j] * projectionMatrix[2][j];
+                }
+                const distSq = x*x + y*y + z*z;
+                distances[i] = distSq;
+                if(distSq < min_dist) min_dist = distSq;
+                if(distSq > max_dist) max_dist = distSq;
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+            }
+
+            const dist_range = (max_dist - min_dist) > 1e-9 ? (max_dist - min_dist) : 1.0;
+            const fireGradient = [
+                { r: 0.1, g: 0, b: 0 }, { r: 1, g: 0, b: 0 },
+                { r: 1, g: 0.6, b: 0 }, { r: 1, g: 1, b: 0.8 }
+            ];
+            for (let i = 0; i < latticeVectorsND.length; i++) {
+                const norm_dist = (distances[i] - min_dist) / dist_range;
+                const heat = Math.pow(1.0 - norm_dist, 2.0);
+                const c_idx = Math.min(fireGradient.length - 1.001, heat * (fireGradient.length - 1));
+                const c_floor = Math.floor(c_idx);
+                const c_frac = c_idx - c_floor;
+                const c1 = fireGradient[c_floor];
+                const c2 = fireGradient[c_floor + 1];
+                colors[i * 3]     = c1.r * (1-c_frac) + c2.r * c_frac;
+                colors[i * 3 + 1] = c1.g * (1-c_frac) + c2.g * c_frac;
+                colors[i * 3 + 2] = c1.b * (1-c_frac) + c2.b * c_frac;
+            }
+
+            pointGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            pointGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const pointMaterial = new THREE.PointsMaterial({
+                size: 0.02,
+                vertexColors: true,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true
+            });
+            
+            points = new THREE.Points(pointGeometry, pointMaterial);
+            scene.add(points);
+            
+            setupControls();
+            
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+        
+        function setupControls() {
+            document.getElementById('rotation-speed').addEventListener('input', e => {
+                rotationSpeed = parseFloat(e.target.value);
+                document.getElementById('speed-value').textContent = rotationSpeed.toFixed(1) + 'x';
+            });
+            document.getElementById('point-size').addEventListener('input', e => {
+                points.material.size = parseFloat(e.target.value);
+                document.getElementById('size-value').textContent = parseFloat(e.target.value).toFixed(3);
+            });
+            document.getElementById('glow-intensity').addEventListener('input', e => {
+                points.material.opacity = 0.5 + parseFloat(e.target.value) * 0.3;
+                document.getElementById('glow-value').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+            document.getElementById('camera-distance').addEventListener('input', e => {
+                camera.position.setLength(parseFloat(e.target.value));
+                document.getElementById('distance-value').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+            document.getElementById('auto-rotate').addEventListener('change', e => { autoRotate = e.target.checked; });
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const currentTime = performance.now();
+            const deltaTime = currentTime - lastFrameTime;
+            lastFrameTime = currentTime;
+            frameTimes.push(deltaTime);
+            if (frameTimes.length > 60) frameTimes.shift();
+            const avgFrameTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+            document.getElementById('fps-counter').textContent = `FPS: ${Math.round(1000 / avgFrameTime)}`;
+
+            if (autoRotate) {
+                const theta = 0.005 * frameCounter * rotationSpeed;
+                getRotationMatrixND(theta, 0, 1, DIM, R1);
+                getRotationMatrixND(theta * phi, 8, 9, DIM, R2);
+                getRotationMatrixND(theta * phi * phi, 16, 17, DIM, R3);
+                
+                multiplyMatricesND(R1, R2, DIM, R_temp);
+                multiplyMatricesND(R_temp, R3, DIM, R);
+                
+                updatePointPositions(R);
+                frameCounter++;
+            }
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        window.resetCamera = function() {
+            camera.position.set(0, 0, 8);
+            controls.reset();
+        }
+        
+        window.randomizeRotation = function() {
+            frameCounter = Math.random() * 10000;
+            const newSpeed = 1 + Math.random() * 3;
+            document.getElementById('rotation-speed').value = newSpeed;
+            document.getElementById('rotation-speed').dispatchEvent(new Event('input'));
+        }
+        
+        window.togglePanel = function() {
+            const panel = document.getElementById('info-panel');
+            const currentOpacity = panel.style.opacity === '0' ? '0' : '1';
+            panel.style.opacity = currentOpacity === '1' ? '0' : '1';
+            panel.style.pointerEvents = currentOpacity === '1' ? 'none' : 'auto';
+        }
+        
+        init();
+        animate();
+    })();
+    </script>
+</body>
+</html>
